@@ -1,15 +1,12 @@
 from __future__ import unicode_literals
-import six
 
+import six
 from django import forms
 from django.db import models
 from django.db.models.query import QuerySet
-from django import forms
-from django.contrib.contenttypes.generic import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
 
 from .registry import registry as default_registry
-from .widgets import ChoiceWidget, MultipleChoiceWidget, TextWidget
+from .widgets import ChoiceWidget, MultipleChoiceWidget
 
 __all__ = ['FieldBase', 'ChoiceField', 'MultipleChoiceField',
     'ModelChoiceField', 'ModelMultipleChoiceField', 'GenericModelChoiceField',
@@ -30,10 +27,12 @@ class FieldBase(object):
                     autocomplete_js_attributes, extra_context)
         kwargs['widget'] = widget
 
-        parents = super(FieldBase, self).__self_class__.__bases__
+        # Does the subclass have ModelChoiceField or ModelMultipleChoiceField
+        # as a base class?
+        parents = type(self).__mro__
         if ((forms.ModelChoiceField in parents or
-                forms.ModelMultipleChoiceField in parents)
-                and isinstance(self.autocomplete.choices, QuerySet)):
+                forms.ModelMultipleChoiceField in parents) and
+                isinstance(self.autocomplete.choices, QuerySet)):
             kwargs['queryset'] = self.autocomplete.choices
 
         super(FieldBase, self).__init__(*args, **kwargs)
@@ -105,6 +104,8 @@ class GenericModelChoiceField(FieldBase, forms.Field):
         Given a model instance as value, with content type id of 3 and pk of 5,
         return such a string '3-5'.
         """
+        from django.contrib.contenttypes.models import ContentType
+
         if isinstance(value, six.string_types):
             # Apparently there's a bug in django, that causes a python value to
             # be passed here. This ONLY happens when in an inline ....
@@ -118,6 +119,8 @@ class GenericModelChoiceField(FieldBase, forms.Field):
         Given a string like '3-5', return the model of content type id 3 and pk
         5.
         """
+        from django.contrib.contenttypes.models import ContentType
+
         if not value:
             return value
 

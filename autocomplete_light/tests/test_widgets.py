@@ -1,24 +1,24 @@
-from lxml.html import etree
+import autocomplete_light.shortcuts as autocomplete_light
+from django.test import TestCase
 from lxml.cssselect import CSSSelector
+from lxml.html import etree
+
+from ..example_apps.basic.models import FkModel
 
 try:
     from unittest import mock
 except ImportError:  # python2
     import mock
 
-from django.test import TestCase
 
-import autocomplete_light
 
-from ..example_apps.basic.models import FkModel
-from ..example_apps.security_test.models import Item
 
 
 class LazyAutocomplete(autocomplete_light.AutocompleteModelBase):
     pass
 
 
-class WidgetBaseTestCase(TestCase):
+class WidgetBaseMixin(object):
     widget_class = autocomplete_light.WidgetBase
     fixtures = ['security_test']
 
@@ -37,12 +37,12 @@ class WidgetBaseTestCase(TestCase):
         self.assertEqual(widget.autocomplete.model, FkModel)
 
     def test_widget_js_attributes_deprecation(self):
-        with self.assertRaises(PendingDeprecationWarning) as context:
-            widget = self.widget_class(widget_js_attributes={'foo': 'bar'})
+        with self.assertRaises(PendingDeprecationWarning):
+            self.widget_class(widget_js_attributes={'foo': 'bar'})
 
     def test_autocomplete_js_attributes_deprecation(self):
-        with self.assertRaises(PendingDeprecationWarning) as context:
-            widget = self.widget_class(autocomplete_js_attributes={'foo': 'bar'})
+        with self.assertRaises(PendingDeprecationWarning):
+            self.widget_class(autocomplete_js_attributes={'foo': 'bar'})
 
     @mock.patch('autocomplete_light.widgets.render_to_string')
     def test_widget_template(self, render_to_string):
@@ -162,15 +162,15 @@ class WidgetBaseTestCase(TestCase):
         self.assertEqual(int(choices[0].attrib['data-value']), 1)
 
 
-class ChoiceWidgetTestCase(WidgetBaseTestCase):
+class ChoiceWidgetTestCase(WidgetBaseMixin, TestCase):
     widget_class = autocomplete_light.ChoiceWidget
 
 
-class MultipleChoiceWidgetTestCase(WidgetBaseTestCase):
+class MultipleChoiceWidgetTestCase(WidgetBaseMixin, TestCase):
     widget_class = autocomplete_light.MultipleChoiceWidget
 
 
-class TextWidgetTestCase(WidgetBaseTestCase):
+class TextWidgetTestCase(WidgetBaseMixin, TestCase):
     widget_class = autocomplete_light.TextWidget
 
     def autocomplete_input(self, et):

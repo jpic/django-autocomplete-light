@@ -1,8 +1,16 @@
-import mock
+try:
+    from unittest import mock
+except ImportError:  # python2
+    import mock
 
+import autocomplete_light.shortcuts as autocomplete_light
 from django import test
 
-import autocomplete_light
+try:
+    from django.test import override_settings
+except ImportError:
+    override_settings = None
+
 
 
 try:
@@ -11,14 +19,13 @@ except ImportError:
     # Django < 1.5
     from django.conf.urls.defaults import patterns, url
 
-urlpatterns = patterns('',
+urlpatterns = [
     url(r'nokwarg/$', mock.Mock, name='test_nokwarg'),
     url(r'onekwarg/(?P<param>\w+)/$', mock.Mock, name='test_onekwarg'),
-)
+]
 
 
 class GetAddAnotherUrlTestCase(test.TestCase):
-    urls = 'autocomplete_light.tests.autocomplete.get_add_another_url'
 
     def generate_url(self, name, kwargs=None):
         class TestAutocomplete(autocomplete_light.AutocompleteBase):
@@ -34,3 +41,8 @@ class GetAddAnotherUrlTestCase(test.TestCase):
     def test_with_kwargs(self):
         self.assertEquals(self.generate_url('test_onekwarg', {'param': 'bar'}),
                           '/onekwarg/bar/?_popup=1')
+
+if override_settings:
+    GetAddAnotherUrlTestCase = override_settings(ROOT_URLCONF='autocomplete_light.tests.autocomplete.test_get_add_another_url')(GetAddAnotherUrlTestCase)
+else:
+    GetAddAnotherUrlTestCase.urls = 'autocomplete_light.tests.autocomplete.test_get_add_another_url'

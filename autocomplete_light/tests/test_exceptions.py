@@ -1,9 +1,8 @@
-from django.test import TestCase
+import autocomplete_light.shortcuts as autocomplete_light
 from django.conf.urls import patterns
+from django.test import TestCase
 
-import autocomplete_light
-
-no_urls = patterns('', )
+no_urls = ['']
 
 
 class AutocompleteListMock(autocomplete_light.AutocompleteListBase):

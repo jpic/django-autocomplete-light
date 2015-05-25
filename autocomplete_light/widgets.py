@@ -1,5 +1,10 @@
 from __future__ import unicode_literals
 
+from django import forms
+from django.template.loader import render_to_string
+from django.utils import safestring
+from django.utils.translation import ugettext_lazy as _
+
 """
 The provided widgets are meant to rely on an Autocomplete class.
 
@@ -15,13 +20,12 @@ The choice autocomplete widget renders from autocomplete_light/widget.html
 template.
 """
 
-from django import forms
-from django.forms.util import flatatt
-from django.utils import safestring
-from django.template.loader import render_to_string
-from django.utils.translation import ugettext_lazy as _
 
-from .registry import registry as default_registry
+try:
+    from django.forms.utils import flatatt
+except ImportError:
+    from django.forms.util import flatatt
+
 
 __all__ = ['WidgetBase', 'ChoiceWidget', 'MultipleChoiceWidget', 'TextWidget']
 
@@ -125,8 +129,7 @@ class WidgetBase(object):
     def __init__(self, autocomplete=None, widget_js_attributes=None,
                  autocomplete_js_attributes=None, extra_context=None,
                  registry=None, widget_template=None, widget_attrs=None):
-
-        self.registry = default_registry if registry is None else registry
+        self._registry = registry
         self._autocomplete = None
         self.autocomplete_arg = autocomplete
 
@@ -144,6 +147,13 @@ class WidgetBase(object):
         if widget_js_attributes is not None:
             raise PendingDeprecationWarning('widget_js_attributes are'
                     'deprecated in favor of widget_attrs')
+
+    @property
+    def registry(self):
+        if self._registry is None:
+            from autocomplete_light.registry import registry
+            self._registry = registry
+        return self._registry
 
     def render(self, name, value, attrs=None):
         widget_attrs = self.build_widget_attrs(name)

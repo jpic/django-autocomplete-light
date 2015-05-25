@@ -1,8 +1,8 @@
 from __future__ import unicode_literals
-import six
 
-from django.utils.encoding import force_text
+import six
 from django.db.models import Q
+from django.utils.encoding import force_text
 
 from ..settings import DEFAULT_SEARCH_FIELDS
 
@@ -39,8 +39,10 @@ class AutocompleteModel(object):
 
     .. py:attribute:: order_by
 
-        If set, it will be used to order choices. It can be a single field name
-        or an iterable (ie. list, tuple).
+        If set, it will be used to order choices in the deck. It can be a
+        single field name or an iterable (ie. list, tuple).
+        However, if AutocompleteModel is instanciated with a list of values,
+        it'll reproduce the ordering of values.
     """
     limit_choices = 20
     choices = None
@@ -64,6 +66,14 @@ class AutocompleteModel(object):
         """
         Order choices using :py:attr:`order_by` option if it is set.
         """
+        if self.values:
+            # Order in the user selection order when self.values is set.
+            clauses = ' '.join(['WHEN id=%s THEN %s' % (pk, i) for i, pk in
+                    enumerate(self.values)])
+            ordering = 'CASE %s END' % clauses
+            return choices.extra(
+                select={'ordering': ordering}, order_by=('ordering',))
+
         if self.order_by is None:
             return choices
 

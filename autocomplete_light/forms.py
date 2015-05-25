@@ -14,34 +14,18 @@ for django bug #9321 or even added security.
 from __future__ import unicode_literals
 
 import six
-
-from django.utils.encoding import force_text
-from django.utils.translation import ugettext_lazy as _
-from django.contrib.admin.widgets import RelatedFieldWidgetWrapper
 from django import forms
-from django.db.models import ForeignKey, OneToOneField, ManyToManyField
-from django.contrib.contenttypes.generic import (GenericForeignKey,
-                                                 GenericRelation)
-from django.contrib.contenttypes.models import ContentType
+from django.contrib.admin.widgets import RelatedFieldWidgetWrapper
+from django.db.models import ForeignKey, ManyToManyField, OneToOneField
 from django.forms.models import modelform_factory as django_modelform_factory
 from django.forms.models import ModelFormMetaclass as DjangoModelFormMetaclass
+from django.utils.encoding import force_text
+from django.utils.translation import ugettext_lazy as _
 
-try:
-    from genericm2m.models import RelatedObjectsDescriptor
-except ImportError:
-    RelatedObjectsDescriptor = None
-
-try:
-    from taggit.managers import TaggableManager
-except ImportError:
-    class TaggableManager(object):
-        pass
-
-from .registry import registry as default_registry
-from .fields import (ModelChoiceField, ModelMultipleChoiceField,
-        GenericModelChoiceField, GenericModelMultipleChoiceField)
 from .contrib.taggit_field import TaggitField
-from .widgets import ChoiceWidget, MultipleChoiceWidget
+from .fields import (GenericModelChoiceField, GenericModelMultipleChoiceField,
+                     ModelChoiceField, ModelMultipleChoiceField)
+from .widgets import MultipleChoiceWidget
 
 __all__ = ['modelform_factory', 'FormfieldCallback', 'ModelForm',
 'SelectMultipleHelpTextRemovalMixin', 'VirtualFieldHandlingMixin',
@@ -97,7 +81,11 @@ class VirtualFieldHandlingMixin(forms.BaseModelForm):
 
         # do what model_to_dict doesn't
         for field in self._meta.model._meta.virtual_fields:
-            self.initial[field.name] = getattr(self.instance, field.name, None)
+            try:
+                self.initial[field.name] = getattr(self.instance, field.name,
+                        None)
+            except:
+                continue
 
     def _post_clean(self):
         """
@@ -105,6 +93,7 @@ class VirtualFieldHandlingMixin(forms.BaseModelForm):
         cleaned_data.
         """
         super(VirtualFieldHandlingMixin, self)._post_clean()
+        from django.contrib.contenttypes.models import ContentType
 
         # take care of virtual fields since django doesn't
         for field in self._meta.model._meta.virtual_fields:
@@ -140,6 +129,11 @@ class GenericM2MRelatedObjectDescriptorHandlingMixin(forms.BaseModelForm):
         Yield name, field for each RelatedObjectsDescriptor of the model of
         this ModelForm.
         """
+        try:
+            from genericm2m.models import RelatedObjectsDescriptor
+        except ImportError:
+            return
+
         for name, field in self.fields.items():
             if not isinstance(field, GenericModelMultipleChoiceField):
                 continue
@@ -152,7 +146,7 @@ class GenericM2MRelatedObjectDescriptorHandlingMixin(forms.BaseModelForm):
 
     def save(self, commit=True):
         """
-        Save the form and particularely the generic many to many relations.
+        Save the form and the generic many to many relations in particular.
         """
         instance = super(GenericM2MRelatedObjectDescriptorHandlingMixin,
                 self).save(commit=commit)
@@ -196,6 +190,8 @@ class FormfieldCallback(object):
         self.autocomplete_exclude = getattr(meta, 'autocomplete_exclude', None)
         self.autocomplete_fields = getattr(meta, 'autocomplete_fields', None)
         self.autocomplete_names = getattr(meta, 'autocomplete_names', {})
+        self.autocomplete_registry = getattr(meta, 'autocomplete_registry',
+                None)
 
         def _default(model_field, **kwargs):
             return model_field.formfield(**kwargs)
@@ -203,6 +199,12 @@ class FormfieldCallback(object):
         self.default = default or _default
 
     def __call__(self, model_field, **kwargs):
+        try:
+            from taggit.managers import TaggableManager
+        except ImportError:
+            class TaggableManager(object):
+                pass
+
         if (self.autocomplete_exclude and
                 model_field.name in self.autocomplete_exclude):
             pass
@@ -213,11 +215,12 @@ class FormfieldCallback(object):
 
         elif hasattr(model_field, 'rel') and hasattr(model_field.rel, 'to'):
             if model_field.name in self.autocomplete_names:
-                autocomplete = default_registry.get(
+                autocomplete = self.autocomplete_registry.get(
                     self.autocomplete_names[model_field.name])
             else:
-                autocomplete = default_registry.autocomplete_for_model(
-                    model_field.rel.to)
+                autocomplete = \
+                    self.autocomplete_registry.autocomplete_for_model(
+                        model_field.rel.to)
 
             if autocomplete is not None:
                 kwargs['autocomplete'] = autocomplete
@@ -251,35 +254,53 @@ class ModelFormMetaclass(DjangoModelFormMetaclass):
         """
         meta = attrs.get('Meta', None)
 
+        # Maybe the parent has a meta ?
+        if meta is None:
+            for parent in bases + type(cls).__mro__:
+                meta = getattr(parent, 'Meta', None)
+
+                if meta is not None:
+                    break
+
         # use our formfield_callback to add autocompletes if not already used
         formfield_callback = attrs.get('formfield_callback', None)
 
-        if not isinstance(formfield_callback, FormfieldCallback):
-            attrs['formfield_callback'] = FormfieldCallback(formfield_callback,
-                    meta)
-
         if meta is not None:
-            cls.clean_meta(meta)
-            cls.pre_new(meta)
+            if getattr(meta, 'autocomplete_registry', None) is None:
+                from autocomplete_light.registry import registry
+                meta.autocomplete_registry = registry
+
+            if getattr(meta, 'model', None):
+                cls.clean_meta(meta)
+                cls.pre_new(meta)
+
+            if not isinstance(formfield_callback, FormfieldCallback):
+                attrs['formfield_callback'] = FormfieldCallback(
+                    formfield_callback, meta)
 
         new_class = super(ModelFormMetaclass, cls).__new__(cls, name, bases,
                 attrs)
 
-        if meta is not None:
+        if meta is not None and getattr(meta, 'model', None):
             cls.post_new(new_class, meta)
 
         return new_class
 
     @classmethod
     def skip_field(cls, meta, field):
+        try:
+            from django.contrib.contenttypes.fields import GenericRelation
+        except ImportError:
+            from django.contrib.contenttypes.generic import GenericRelation
+
         if isinstance(field, GenericRelation):
             # skip reverse generic foreign key
             return True
 
-        all_fields = set(getattr(meta, 'fields', [])) | set(getattr(meta,
-            'autocomplete_fields', []))
-        all_exclude = set(getattr(meta, 'exclude', [])) | set(getattr(meta,
-            'autocomplete_exclude', []))
+        all_fields = set(getattr(meta, 'fields', []) or []) | set(
+            getattr(meta, 'autocomplete_fields', []))
+        all_exclude = set(getattr(meta, 'exclude', []) or []) | set(
+            getattr(meta, 'autocomplete_exclude', []))
 
         if getattr(meta, 'fields', None) == '__all__':
             return field.name in all_exclude
@@ -292,11 +313,22 @@ class ModelFormMetaclass(DjangoModelFormMetaclass):
 
     @classmethod
     def clean_meta(cls, meta):
+        try:
+            from django.contrib.contenttypes.fields import GenericForeignKey
+        except ImportError:
+            from django.contrib.contenttypes.generic import GenericForeignKey
+
+        try:
+            from genericm2m.models import RelatedObjectsDescriptor
+        except ImportError:
+            RelatedObjectsDescriptor = None
+
         # All virtual fields/excludes must be move to
         # autocomplete_fields/exclude
         fields = getattr(meta, 'fields', [])
 
-        for field in fields:
+        # Using or [] because fields might be None in some django versions.
+        for field in fields or []:
             model_field = getattr(meta.model._meta.virtual_fields, field, None)
 
             if model_field is None:
@@ -318,6 +350,11 @@ class ModelFormMetaclass(DjangoModelFormMetaclass):
 
     @classmethod
     def pre_new(cls, meta):
+        try:
+            from django.contrib.contenttypes.fields import GenericForeignKey
+        except ImportError:
+            from django.contrib.contenttypes.generic import GenericForeignKey
+
         exclude = tuple(getattr(meta, 'exclude', []))
         add_exclude = []
 
@@ -338,6 +375,11 @@ class ModelFormMetaclass(DjangoModelFormMetaclass):
     def post_new(cls, new_class, meta):
         cls.add_generic_fk_fields(new_class, meta)
 
+        try:
+            from genericm2m.models import RelatedObjectsDescriptor
+        except ImportError:
+            RelatedObjectsDescriptor = None
+
         if RelatedObjectsDescriptor:
             # if genericm2m is installed
             cls.add_generic_m2m_fields(new_class, meta)
@@ -351,15 +393,25 @@ class ModelFormMetaclass(DjangoModelFormMetaclass):
             if cls.skip_field(meta, field):
                 continue
 
+            if hasattr(meta.model._meta, 'get_field'):
+                _field = meta.model._meta.get_field(field.fk_field)
+            else:
+                # Pre django 1.9 support
+                _field = meta.model._meta.get_field_by_name(field.fk_field)
+
             new_class.base_fields[field.name] = GenericModelChoiceField(
                 widget=widgets.get(field.name, None),
                 autocomplete=cls.get_generic_autocomplete(meta, field.name),
-                required=not meta.model._meta.get_field_by_name(
-                    field.fk_field)
+                required=not _field
             )
 
     @classmethod
     def add_generic_m2m_fields(cls, new_class, meta):
+        try:
+            from genericm2m.models import RelatedObjectsDescriptor
+        except ImportError:
+            RelatedObjectsDescriptor = None
+
         widgets = getattr(meta, 'widgets', {})
 
         for field in meta.model.__dict__.values():
@@ -381,9 +433,9 @@ class ModelFormMetaclass(DjangoModelFormMetaclass):
             name, None)
 
         if autocomplete_name:
-            return default_registry[autocomplete_name]
+            return meta.autocomplete_registry[autocomplete_name]
         else:
-            return default_registry.default_generic
+            return meta.autocomplete_registry.default_generic
 
 
 class ModelForm(six.with_metaclass(ModelFormMetaclass,
@@ -394,7 +446,7 @@ class ModelForm(six.with_metaclass(ModelFormMetaclass,
 
     .. py:attribute:: autocomplete_fields
 
-        A list field names on which you want automatic autocomplete fields.
+        A list of field names on which you want automatic autocomplete fields.
 
     .. py:attribute:: autocomplete_exclude
 
@@ -438,6 +490,13 @@ def modelform_factory(model, autocomplete_fields=None,
     if hasattr(kwargs['form'], 'Meta'):
         parent = (kwargs['form'].Meta, object)
     Meta = type(str('Meta'), parent, attrs)
+
+    # We have to handle Meta.fields/Meta.exclude here because else Django will
+    # raise a warning.
+    if 'fields' in kwargs:
+        Meta.fields = kwargs.pop('fields')
+    if 'exclude' in kwargs:
+        Meta.exclude = kwargs.pop('exclude')
 
     kwargs['form'] = type(kwargs['form'].__name__, (kwargs['form'],),
             {'Meta': Meta})

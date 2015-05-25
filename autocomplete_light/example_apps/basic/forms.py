@@ -1,4 +1,7 @@
+import autocomplete_light.shortcuts as autocomplete_light
 from django import VERSION
+
+from .models import *
 
 try:
     import genericm2m
@@ -10,11 +13,7 @@ try:
 except ImportError:
     taggit = None
 
-import autocomplete_light
 
-autocomplete_light.autodiscover()
-
-from .models import *
 
 
 class DjangoCompatMeta:

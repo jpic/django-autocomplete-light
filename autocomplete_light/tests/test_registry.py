@@ -1,10 +1,10 @@
 import unittest
 
+import autocomplete_light.shortcuts as autocomplete_light
 import django
 from django.contrib.auth.models import User
 from django.db import models
-
-import autocomplete_light
+from django.test import TestCase
 
 
 class Noname(models.Model):
@@ -28,7 +28,7 @@ class Generic(autocomplete_light.AutocompleteGenericBase):
     )
 
 
-class RegistryTestCase(unittest.TestCase):
+class RegistryTestCase(TestCase):
     def setUp(self):
         self.registry = autocomplete_light.AutocompleteRegistry()
 
@@ -127,7 +127,7 @@ class RegistryTestCase(unittest.TestCase):
             self.registry.autocomplete_for_generic(), FirstAutocomplete))
 
 
-class RegistryGetAutocompleteFromArgTestCase(unittest.TestCase):
+class RegistryGetAutocompleteFromArgTestCase(TestCase):
     def setUp(self):
         self.registry = autocomplete_light.AutocompleteRegistry()
         self.registry.register(Foo)
@@ -153,9 +153,53 @@ class RegistryGetAutocompleteFromArgTestCase(unittest.TestCase):
         a = self.registry.get_autocomplete_from_arg()
         self.assertTrue(issubclass(a, Generic))
 
+    def test_model_picked_up_from_autocomplete_class_model(self):
+        # GitHub issue #313
+        class TestModel(models.Model):
+            name = models.CharField(max_length=100)
+
+        class XAutocomplete(autocomplete_light.AutocompleteModelBase):
+            model = TestModel
+
+        self.registry.register(XAutocomplete)
+        result = self.registry.get_autocomplete_from_arg(TestModel)
+
+        assert result
+        assert issubclass(result, XAutocomplete)
+
+    def test_model_picked_up_from_autocomplete_class_choices_model(self):
+        class TestModel(models.Model):
+            name = models.CharField(max_length=100)
+
+        class YAutocomplete(autocomplete_light.AutocompleteModelBase):
+            choices = TestModel.objects.all()
+
+        self.registry.register(YAutocomplete)
+        result = self.registry.get_autocomplete_from_arg(TestModel)
+
+        assert result
+        assert issubclass(result, YAutocomplete)
+
+    def test_registering_autocomplete_without_model_name_as_prefix(self):
+        class TestModel(models.Model):
+            name = models.CharField(max_length=100)
+
+        class Base(autocomplete_light.AutocompleteModelBase):
+            pass
+
+        class BarAutocomplete(Base):
+            model = TestModel
+            choices = TestModel.objects.all()
+
+        self.registry.register(BarAutocomplete)
+        assert 'BarAutocomplete' in self.registry
+        result = self.registry.get_autocomplete_from_arg(TestModel)
+        assert result
+        assert issubclass(result, BarAutocomplete)
+
 
 @unittest.skipIf(django.VERSION < (1, 7), 'require django 1.7')
-class AppConfigSupportTestCase(unittest.TestCase):
+class AppConfigSupportTestCase(TestCase):
     def test_appconfig_with_registry_file(self):
         self.assertIsInstance(autocomplete_light.registry['AppConfigWithRegistryAutocomplete'](),
                              autocomplete_light.AutocompleteListBase)

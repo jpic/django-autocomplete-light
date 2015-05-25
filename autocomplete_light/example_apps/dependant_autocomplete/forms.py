@@ -1,6 +1,5 @@
-from django import forms
-
 import autocomplete_light
+from django import forms
 
 from .models import Dummy
 
@@ -17,3 +16,4 @@ class DummyForm(autocomplete_light.ModelForm):
 
     class Meta:
         model = Dummy
+        exclude = []

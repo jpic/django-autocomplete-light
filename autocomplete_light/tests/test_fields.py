@@ -1,16 +1,15 @@
 from __future__ import unicode_literals
 
-from django.test import TestCase
+import autocomplete_light.shortcuts as autocomplete_light
 from django import forms
 from django.contrib.contenttypes.models import ContentType
+from django.test import TestCase
 
-import autocomplete_light
-
-from ..example_apps.security_test.models import Item
 from ..example_apps.basic.models import GfkModel
+from ..example_apps.security_test.models import Item
 
 
-class BaseTestCase(TestCase):
+class BaseMixin(object):
     GOOD_VALUE = 'b'
     CLEANED_VALUE = 'b'
     BAD_VALUE = 'xx'
@@ -38,17 +37,17 @@ class BaseTestCase(TestCase):
         self.assertEqual(form.cleaned_data['test_field'], self.CLEANED_VALUE)
 
 
-class ChoiceFieldTestCase(BaseTestCase):
+class ChoiceFieldTestCase(BaseMixin, TestCase):
     field_class = autocomplete_light.ChoiceField
 
 
-class MultipleChoiceFieldTestCase(BaseTestCase):
+class MultipleChoiceFieldTestCase(BaseMixin, TestCase):
     field_class = autocomplete_light.MultipleChoiceField
     GOOD_VALUE = ['b']
     CLEANED_VALUE = ['b']
 
 
-class ModelChoiceFieldTestCase(BaseTestCase):
+class ModelChoiceFieldTestCase(BaseMixin, TestCase):
     fixtures = ['security_test.json']
     field_class = autocomplete_light.ModelChoiceField
     GOOD_VALUE = 1
@@ -91,7 +90,45 @@ class ModelMultipleChoiceFieldTestCase(ModelChoiceFieldTestCase):
                          self.CLEANED_VALUE[0])
 
 
-class GenericModelChoiceFieldTestCase(BaseTestCase):
+class CustomModelChoiceField(forms.ModelChoiceField):
+    pass
+
+
+class CustomModelMultipleChoiceField(forms.ModelMultipleChoiceField):
+    pass
+
+
+class CustomAutocompleteModelChoiceField(autocomplete_light.FieldBase,
+                                         CustomModelChoiceField):
+    """ Autocomplete form field which inherently, but not directly, inherits
+    forms.ModelChoiceField
+    """
+    widget = autocomplete_light.ChoiceWidget
+
+
+class CustomAutocompleteModelMultipleChoiceField(autocomplete_light.FieldBase,
+                                                 CustomModelMultipleChoiceField):
+    """ Autocomplete form field which inherently, but not directly, inherits
+    forms.ModelMultipleChoiceField
+    """
+    widget = autocomplete_light.MultipleChoiceWidget
+
+
+class CustomModelFieldTestCase(ModelChoiceFieldTestCase):
+    """ Regression test for a custom ModelChoiceField
+    https://github.com/yourlabs/django-autocomplete-light/issues/379
+    """
+    field_class = CustomAutocompleteModelChoiceField
+
+
+class CustomMultipleModelFieldTestCase(ModelMultipleChoiceFieldTestCase):
+    """ Regression test for a custom ModelMultipleChoiceField
+    https://github.com/yourlabs/django-autocomplete-light/issues/379
+    """
+    field_class = CustomAutocompleteModelMultipleChoiceField
+
+
+class GenericModelChoiceFieldTestCase(BaseMixin, TestCase):
     field_class = autocomplete_light.GenericModelChoiceField
     fixtures = ['basic_gfk_gmtm.json']
 

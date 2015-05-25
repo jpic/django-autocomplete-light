@@ -84,6 +84,40 @@ SECRET_KEY = '^le6=#%$1z63o!#z^qr(r+^ix&iqx)@h*u$@8$bu&n8cv6m)go'
 
 ROOT_URLCONF = 'test_project.urls'
 
+if django.VERSION < (1, 8):
+    TEMPLATE_CONTEXT_PROCESSORS = (
+        'django.contrib.auth.context_processors.auth',
+        'django.core.context_processors.debug', 
+        'django.core.context_processors.i18n',
+        'django.core.context_processors.media',
+        'django.core.context_processors.static', 
+        'django.core.context_processors.tz',
+        'django.contrib.messages.context_processors.messages'
+    )
+else:
+    TEMPLATE_CONTEXT_PROCESSORS = (
+        'django.contrib.auth.context_processors.auth',
+        'django.template.context_processors.debug',
+        'django.template.context_processors.i18n',
+        'django.template.context_processors.media',
+        'django.template.context_processors.static',
+        'django.template.context_processors.tz',
+        'django.contrib.messages.context_processors.messages'
+    )
+
+
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': TEMPLATE_CONTEXT_PROCESSORS,
+        },
+        'DIRS': TEMPLATE_DIRS,
+    },
+]
+
 # Python dotted path to the WSGI application used by Django's runserver.
 WSGI_APPLICATION = 'test_project.wsgi.application'
 
@@ -94,11 +128,10 @@ INSTALLED_APPS = (
     'django.contrib.sites',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'autocomplete_light',
     'django.contrib.admin',
-
     'cities_light',
 
-    'autocomplete_light',
     'autocomplete_light.example_apps.basic',
     'autocomplete_light.example_apps.music',
     'autocomplete_light.example_apps.autocomplete_test_case_app',
@@ -119,6 +152,10 @@ elif django.VERSION >= (1, 7):
         'autocomplete_light.example_apps.app_config_without_registry_file.apps.AppConfigWithoutRegistryFile',
     )
 
+if django.VERSION >= (1, 5):
+    INSTALLED_APPS += (
+        'autocomplete_light.example_apps.unuseable_virtualfield',
+    )
 
 try:
     import genericm2m
@@ -135,8 +172,6 @@ else:
     INSTALLED_APPS += ('taggit',)
 
 SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
-
-TEST_RUNNER = 'django.test.simple.DjangoTestSuiteRunner'
 
 SOUTH_MIGRATION_MODULES = {
     'taggit': 'taggit.south_migrations',

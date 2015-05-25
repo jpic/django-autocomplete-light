@@ -1,12 +1,13 @@
 from __future__ import unicode_literals
 
-import unittest
 from collections import OrderedDict
 
-from autocomplete_light.templatetags.autocomplete_light_tags import *
+from autocomplete_light.templatetags. \
+    autocomplete_light_tags import autocomplete_light_data_attributes
+from django.test import TestCase
 
 
-class DataAttributesTestCase(unittest.TestCase):
+class DataAttributesTestCase(TestCase):
     def test_without_prefix(self):
         tests = (
             {

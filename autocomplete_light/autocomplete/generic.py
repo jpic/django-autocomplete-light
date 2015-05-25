@@ -1,10 +1,8 @@
 from __future__ import unicode_literals
-import six
-
-from django.contrib.contenttypes.models import ContentType
-from django.db.models import Q
 
 import autocomplete_light
+import six
+
 from ..settings import DEFAULT_SEARCH_FIELDS
 from .model import AutocompleteModel
 
@@ -18,7 +16,7 @@ class AutocompleteGenericMetaClass(type):
 
         if attrs.get('__module__',
                 '').startswith('autocomplete_light.autocomplete'):
-            # we are defining own of our own classes
+            # We are defining one of our own classes.
             return new_class
 
         if not new_class.search_fields:
@@ -90,6 +88,7 @@ class AutocompleteGeneric(six.with_metaclass(AutocompleteGenericMetaClass,
             except ValueError:
                 return False
 
+            from django.contrib.contenttypes.models import ContentType
             try:
                 content_type = ContentType.objects.get_for_id(content_type_id)
             except ContentType.DoesNotExist:
@@ -147,6 +146,7 @@ class AutocompleteGeneric(six.with_metaclass(AutocompleteGenericMetaClass,
         values_choices = []
 
         for queryset in self.choices:
+            from django.contrib.contenttypes.models import ContentType
             ctype = ContentType.objects.get_for_model(queryset.model).pk
 
             try:

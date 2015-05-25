@@ -1,5 +1,12 @@
 from __future__ import unicode_literals
 
+import six
+from django.db import models
+
+from .exceptions import (AutocompleteArgNotUnderstood,
+                         AutocompleteNotRegistered,
+                         NoGenericAutocompleteRegistered)
+
 """
 The registry module provides tools to maintain a registry of autocompletes.
 
@@ -19,14 +26,6 @@ It looks like this:
 
     Module-level instance of :py:class:`AutocompleteRegistry`.
 """
-import six
-
-from django.db import models
-
-from .autocomplete import AutocompleteModelBase, AutocompleteInterface
-from .exceptions import (AutocompleteNotRegistered,
-                         AutocompleteArgNotUnderstood,
-                         NoGenericAutocompleteRegistered)
 
 try:
     from django.utils.module_loading import autodiscover_modules
@@ -63,9 +62,6 @@ class AutocompleteRegistry(dict):
         self._models = {}
         self.default_generic = None
         self.autocomplete_model_base = autocomplete_model_base
-
-        if self.autocomplete_model_base is None:
-            self.autocomplete_model_base = AutocompleteModelBase
 
     def autocomplete_for_model(self, model):
         """
@@ -134,15 +130,21 @@ class AutocompleteRegistry(dict):
 
         model, autocomplete = self.__class__.extract_args(*args)
 
-        if not model:
+        # If calling register(YourBaseAutocomplete, YourModel) then you want
+        # the autocomplete name to be YourModelYourBaseAutocomplete, but if
+        # calling register(YourBaseAutocomplete) then name should be
+        # YourBaseAutocomplete
+        derivate_name = model and autocomplete
+
+        if autocomplete and not model:
             try:
                 model = autocomplete.choices.model
             except AttributeError:
-                pass
+                model = getattr(autocomplete, 'model', None)
 
         if model:
             autocomplete = self._register_model_autocomplete(model,
-                autocomplete, **kwargs)
+                autocomplete, derivate_name, **kwargs)
         else:
             name = kwargs.get('name', autocomplete.__name__)
             autocomplete = type(str(name), (autocomplete,), kwargs)
@@ -151,19 +153,25 @@ class AutocompleteRegistry(dict):
         return autocomplete
 
     def _register_model_autocomplete(self, model, autocomplete=None,
-                                    name=None, **kwargs):
-
+                                     derivate_name=False, name=None, **kwargs):
         if name is not None:
             pass
+
         elif autocomplete is not None:
             if autocomplete.__name__.find(model.__name__) == 0:
-                name = autocomplete.__name__
-            else:
+                derivate_name = False
+
+            if derivate_name:
                 name = '%s%s' % (model.__name__, autocomplete.__name__)
+            else:
+                name = autocomplete.__name__
         else:
             name = '%sAutocomplete' % model.__name__
 
         if autocomplete is None:
+            if self.autocomplete_model_base is None:
+                from .autocomplete.shortcuts import AutocompleteModelBase
+                self.autocomplete_model_base = AutocompleteModelBase
             base = self.autocomplete_model_base
         else:
             base = autocomplete
@@ -212,6 +220,7 @@ class AutocompleteRegistry(dict):
             raise AutocompleteNotRegistered(name, self)
 
     def get_autocomplete_from_arg(self, arg=None):
+        from .autocomplete.base import AutocompleteInterface
         if isinstance(arg, six.string_types):
             return self[arg]
         elif isinstance(arg, type) and issubclass(arg, models.Model):
