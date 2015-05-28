@@ -9,7 +9,6 @@ from .models import XModel, YModel, ZModel
 
 
 class YModelForm(forms.ModelForm):
-    x = autocomplete_light.ModelChoiceField('XModelAutocomplete', label="XModel")
 
     class Meta:
         exclude = tuple()
